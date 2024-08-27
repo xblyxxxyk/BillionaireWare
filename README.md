@@ -4,6 +4,7 @@
 # BillionaireWare
 
 CS2 Internal Cheat / Cheat Base written in C++
+Only supports Windows. 10/11
 
 2 Aimbot Methods, 2 ESP Methods, Smoothing, Aimbone (Only for legit aim)
 
