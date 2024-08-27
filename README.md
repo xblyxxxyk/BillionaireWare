@@ -1,6 +1,8 @@
 ![image](https://github.com/user-attachments/assets/39377255-9e1e-48d4-9bc5-6566c0317629)
 
 
+# BillionaireWare
+
 CS2 Internal Cheat / Cheat Base written in C++
 
 2 Aimbot Methods, 2 ESP Methods, Smoothing, Aimbone (Only for legit aim)
