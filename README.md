@@ -8,6 +8,8 @@ Only supports Windows.
 
 2 Aimbot Methods, 2 ESP Methods, Smoothing, Aimbone (Only for legit aim)
 
+Both ESP Methods rendered inside the engine. As u might know, this causes certain glitches like blinking. But still works fine
+
 Simple to understand for beginners. Can use it as a starting point for ur own cheat.
 
 Using ImGui / MinHook
