@@ -18,7 +18,10 @@ If you do not know how to find pointers in cheat Engine, there is many good tuto
 
 How to build:
 
+Open .vcxproj
 Compile as Debug x64
+
+Of course you need to install Visual Studio 2022.
 
 How to inject:
 
