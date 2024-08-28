@@ -30,9 +30,14 @@ namespace offset {
 	constexpr std::ptrdiff_t m_vOldOrigin = 0x1274;
 	// Ask on unknowncheats for these offsets or find on the internet
 }
+//client.dll
 pointer GoldEsp = { 0x19B7FA0, { 0x40 } }; //r_aoproxy_show 1
 pointer BlinkLess = { 0x19C5DC0, { 0x4F0 } }; //r_extra_render_frames 1
 pointer NumberEsp = { 0x19CD3E8, { 0x40 } }; //cl_player_proximity_debug 1
+pointer NoSkybox =  { 0x19D9E78, { 0x90 } }; //r_drawskybox 0
+
+//scenesystem.dll
+pointer H_nolights = { 0x597F70, { 0x40 } }; //HIDDEN CVAR lb_enable_lights
 // HOW TO DUMP POINTERS
 	// Go to bots game, open console and type sv_cheats 1. Copy the command u want and change to 1.
 	// Then open cheat engine and if val is 1 scan for 1 (byte) then 0 after u change it, then 1 then 0 and until u get good results
@@ -51,6 +56,7 @@ pointer NumberEsp = { 0x19CD3E8, { 0x40 } }; //cl_player_proximity_debug 1
 
 uintptr_t clientbase = (DWORD64)GetModuleHandle("client.dll");
 uintptr_t cs2base = (DWORD64)GetModuleHandle("cs2.exe"); //probably wont need it
+uintptr_t scenebase = (DWORD64)GetModuleHandle("scenesystem.dll"); //probably wont need it
 
 
 
@@ -427,6 +433,8 @@ bool bunnyhop = false;
 bool trigger = false;
 bool numberesp = false;
 bool goldenesp = false;
+bool noskybox = false;
+bool nolights = false;
 bool rageaimboot = false;
 bool aimboot = false;
 
@@ -589,10 +597,11 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 			ImGui_ImplDX11_Init(DirectX11Interface::Device, DirectX11Interface::DeviceContext);
 
 			//LoadCustomFont(); ur own font
-			/*ImGui_ImplDX11_CreateDeviceObjects();
+			ImGui_ImplDX11_CreateDeviceObjects();
 			ImGui::GetIO().ImeWindowHandle = Process::Hwnd;
 			Process::WndProc = (WNDPROC)SetWindowLongPtr(Process::Hwnd, GWLP_WNDPROC, (__int3264)(LONG_PTR)WndProc);
 			ImGui_Initialised = true;
+			/*
 			AllocConsole();
 			freopen("CONOUT$", "w", stdout);
 
@@ -629,6 +638,8 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 		ImGui::SliderFloat("Smoothing", &smoothingFactor, 1.0f, 50.0f);
 		ImGui::Checkbox("Number ESP", &numberesp);
 		ImGui::Checkbox("Golden ESP", &goldenesp);
+		ImGui::Checkbox("Disable Skybox", &noskybox);
+		ImGui::Checkbox("Disable Lights", &nolights);
 		ImGui::Text("Client base address: 0x%X", clientbase);
 		ImGui::Text("CS2 base address: 0x%X", cs2base);
 		ImGui::Text("Developed by bly", cs2base);
@@ -638,9 +649,13 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 	std::once_flag flag;
 	std::once_flag flag2;
 	std::once_flag flag4;
+	std::once_flag flag7;
+	std::once_flag flag8;
 	uintptr_t* goldesp = (uintptr_t*)GetPointerAddress(clientbase + GoldEsp.a, GoldEsp.b); //r_aoproxy_show 1
 	uintptr_t* blinkless = (uintptr_t*)GetPointerAddress(clientbase + BlinkLess.a, BlinkLess.b); //r_r_extra_render_frames 1
 	uintptr_t* number = (uintptr_t*)GetPointerAddress(clientbase + NumberEsp.a, NumberEsp.b); //cl_player_proximity_debug 1
+	uintptr_t* skybox = (uintptr_t*)GetPointerAddress(clientbase + NoSkybox.a, NoSkybox.b); //r_drawskybox 0
+	uintptr_t* no_lights = (uintptr_t*)GetPointerAddress(scenebase + H_nolights.a, H_nolights.b); //HIDDEN CVAR
 	if (goldenesp) {
 		std::call_once(flag2, [&]() { *goldesp = 1; });
 		std::call_once(flag4, [&]() { *blinkless = 1; });
@@ -649,12 +664,28 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 		std::call_once(flag2, [&]() { *goldesp = 0; });
 		std::call_once(flag4, [&]() { *blinkless = 0; });
 	}
+
+	if (noskybox) {
+		std::call_once(flag7, [&]() { *skybox = 0; });
+	}
+	else {
+		std::call_once(flag7, [&]() { *skybox = 1; });
+	}
+
+	if (nolights) {
+		std::call_once(flag8, [&]() { *no_lights = 0; });
+	}
+	else {
+		std::call_once(flag8, [&]() { *no_lights = 1; });
+	}
+
 	if (numberesp) {
 		std::call_once(flag, [&]() { *number = 1; });
 	}
 	else {
 		std::call_once(flag, [&]() { *number = 0; });
 	}
+
 	if (trigger) {
 		//not working, to be fixed
 		if (GetAsyncKeyState(VK_CAPITAL)){
