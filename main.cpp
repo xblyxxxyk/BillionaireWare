@@ -11,6 +11,11 @@
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_impl_dx11.h"
 #include "ImGui/imgui_impl_win32.h"
+struct pointer {
+	uintptr_t a;
+	std::vector<uintptr_t> b;
+	//if u need more add c d e f g etc...
+};
 namespace offset {
 	constexpr std::ptrdiff_t dwViewMatrix = 0x19CA480;
 	constexpr std::ptrdiff_t dwEntityList = 0x19684F8;
@@ -23,9 +28,26 @@ namespace offset {
 	constexpr std::ptrdiff_t m_iHealth = 0x324;
 	constexpr std::ptrdiff_t m_iTeamNum = 0x3C3;
 	constexpr std::ptrdiff_t m_vOldOrigin = 0x1274;
-	// https://github.com/a2x/cs2-dumper find offsets here
-
+	// Ask on unknowncheats for these offsets or find on the internet
 }
+pointer GoldEsp = { 0x19B7FA0, { 0x40 } }; //r_aoproxy_show 1
+pointer BlinkLess = { 0x19C5DC0, { 0x4F0 } }; //r_extra_render_frames 1
+pointer NumberEsp = { 0x19CD3E8, { 0x40 } }; //cl_player_proximity_debug 1
+// HOW TO DUMP POINTERS
+	// Go to bots game, open console and type sv_cheats 1. Copy the command u want and change to 1.
+	// Then open cheat engine and if val is 1 scan for 1 (byte) then 0 after u change it, then 1 then 0 and until u get good results
+	// U can change value directly in cheat engine to know if its right. If changes are visible in game, its right.
+	// After u got right value click Generate Pointer Map, once its done generating Pointer Scan for this Address
+	// Select Use Saved Pointermap, Set Maximum Offset Value to 65535 and Max Level to 1
+	// Click Ok and search for values. You will get a few maybe 10-500
+	// Look for pointers that start with "client.dll" These should be all good
+	// Double click on the pointer u think is good and restart game, then select process again
+	// If value on pointer is 0 its probably good. Go in game then change to 1, and u will know for 100%
+	// After that click on the address, last section will be "client.dll"+019C5DC0 for example
+	// And above that u have 4F0 for example. Then that means, pointer is 019C5DC0+4F0
+	// You can add that already or do 0x19C5DC0+0x4F0, both are valid. Congrats, u have your pointer! Continue process to get all.
+
+
 
 uintptr_t clientbase = (DWORD64)GetModuleHandle("client.dll");
 uintptr_t cs2base = (DWORD64)GetModuleHandle("cs2.exe"); //probably wont need it
@@ -476,7 +498,7 @@ void __fastcall CreateMoveHook(CCSGOInput* ecx, int edx, char a2);
 
 void __fastcall CreateMoveHook(CCSGOInput* ecx, int edx, char a2)
 {
-	std::cout << ecx << std::endl; //print ECX and we can look in reclass further
+	std::cout << "Golden ESP HOOKED";
 	oCreateMove(ecx, edx, a2);
 
 }
@@ -571,10 +593,9 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 			ImGui::GetIO().ImeWindowHandle = Process::Hwnd;
 			Process::WndProc = (WNDPROC)SetWindowLongPtr(Process::Hwnd, GWLP_WNDPROC, (__int3264)(LONG_PTR)WndProc);
 			ImGui_Initialised = true;
-			//AllocConsole(); to debug ofc
-			//freopen("CONOUT$", "w", stdout);
+			AllocConsole();
+			freopen("CONOUT$", "w", stdout);
 
-			/* CreateMove Hook
 			auto createmove = PatternScan("client.dll", "85 D2 0F 85 ? ? ? ? 48 8B C4 44 88 40 18");
 			if (!createmove)
 				return NULL;
@@ -583,7 +604,6 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 
 			MH_CreateHook((LPVOID)createmove, (LPVOID)CreateMoveHook, (LPVOID*)&oCreateMove);
 			MH_EnableHook(MH_ALL_HOOKS);
-			*/
 
 			/* to call off
 			MH_DisableHook(MH_ALL_HOOKS);
@@ -602,7 +622,7 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 	if (ShowMenu == true) {
 		ImGui::SetNextWindowSize(ImVec2(400, 400));
 		ImGui::Begin("BillionaireWare");
-		//ImGui::Checkbox("Bunny Hop", &bunnyhop);
+		ImGui::Checkbox("Bunny Hop", &bunnyhop);
 		ImGui::Checkbox("Rage Aimbot [SHIFT]", &rageaimboot);
 		ImGui::Checkbox("Legit Aimbot [SHIFT]", &aimboot);
 		ImGui::Combo("[Only for Legit]", &HitBone, ("Head\0Chest\0Legs\0Feet\0"));
@@ -614,24 +634,26 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 		ImGui::Text("Developed by bly", cs2base);
 		ImGui::End();
 	}
-	if (bunnyhop) {
-		//uncomment createmove hook and try
-	}
+
 	std::once_flag flag;
-	uintptr_t* number = (uintptr_t*)GetPointerAddress(clientbase + 0x19CD3E8, { 0x40 }); //cl_player_proximity_debug 1  (U can find your own pointer by turning on sv_cheats 1 and changing byte from 1 to 0 then 1 to 0 etc...)
+	std::once_flag flag2;
+	std::once_flag flag4;
+	uintptr_t* goldesp = (uintptr_t*)GetPointerAddress(clientbase + GoldEsp.a, GoldEsp.b); //r_aoproxy_show 1
+	uintptr_t* blinkless = (uintptr_t*)GetPointerAddress(clientbase + BlinkLess.a, BlinkLess.b); //r_r_extra_render_frames 1
+	uintptr_t* number = (uintptr_t*)GetPointerAddress(clientbase + NumberEsp.a, NumberEsp.b); //cl_player_proximity_debug 1
+	if (goldenesp) {
+		std::call_once(flag2, [&]() { *goldesp = 1; });
+		std::call_once(flag4, [&]() { *blinkless = 1; });
+	}
+	else {
+		std::call_once(flag2, [&]() { *goldesp = 0; });
+		std::call_once(flag4, [&]() { *blinkless = 0; });
+	}
 	if (numberesp) {
 		std::call_once(flag, [&]() { *number = 1; });
 	}
 	else {
 		std::call_once(flag, [&]() { *number = 0; });
-	}
-	std::once_flag flag2;
-	uintptr_t* goldesp = (uintptr_t*)GetPointerAddress(clientbase + 0x19B7FA0, { 0x40 }); //r_aoproxy_show 1 and same here
-	if (goldenesp) {
-		std::call_once(flag2, [&]() { *goldesp = 1; });
-	}
-	else {
-		std::call_once(flag2, [&]() { *goldesp = 0; });
 	}
 	if (trigger) {
 		//not working, to be fixed
