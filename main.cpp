@@ -589,7 +589,7 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 			ImGui_ImplDX11_Init(DirectX11Interface::Device, DirectX11Interface::DeviceContext);
 
 			//LoadCustomFont(); ur own font
-			ImGui_ImplDX11_CreateDeviceObjects();
+			/*ImGui_ImplDX11_CreateDeviceObjects();
 			ImGui::GetIO().ImeWindowHandle = Process::Hwnd;
 			Process::WndProc = (WNDPROC)SetWindowLongPtr(Process::Hwnd, GWLP_WNDPROC, (__int3264)(LONG_PTR)WndProc);
 			ImGui_Initialised = true;
@@ -604,7 +604,7 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 
 			MH_CreateHook((LPVOID)createmove, (LPVOID)CreateMoveHook, (LPVOID*)&oCreateMove);
 			MH_EnableHook(MH_ALL_HOOKS);
-
+			*/
 			/* to call off
 			MH_DisableHook(MH_ALL_HOOKS);
 			MH_RemoveHook(MH_ALL_HOOKS);
@@ -622,7 +622,7 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 	if (ShowMenu == true) {
 		ImGui::SetNextWindowSize(ImVec2(400, 400));
 		ImGui::Begin("BillionaireWare");
-		ImGui::Checkbox("Bunny Hop", &bunnyhop);
+		//ImGui::Checkbox("Bunny Hop", &bunnyhop);
 		ImGui::Checkbox("Rage Aimbot [SHIFT]", &rageaimboot);
 		ImGui::Checkbox("Legit Aimbot [SHIFT]", &aimboot);
 		ImGui::Combo("[Only for Legit]", &HitBone, ("Head\0Chest\0Legs\0Feet\0"));
