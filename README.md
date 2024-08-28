@@ -1,4 +1,5 @@
-![image](https://github.com/user-attachments/assets/39377255-9e1e-48d4-9bc5-6566c0317629)
+![image](https://github.com/user-attachments/assets/6b570ae1-1658-41e5-8292-5d330ad7fe02)
+
 
 
 # BillionaireWare
@@ -8,7 +9,7 @@ Only supports Windows.
 
 2 Aimbot Methods, 2 ESP Methods, Smoothing, Aimbone (Only for legit aim)
 
-Both ESP Methods rendered inside the engine. As u might know, this causes certain glitches like blinking. But still works fine
+Both ESP Methods rendered inside the engine. Golden ESP works perfectly 1:1
 
 Simple to understand for beginners. Can use it as a starting point for ur own cheat.
 
