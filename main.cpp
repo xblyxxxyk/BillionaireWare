@@ -7,7 +7,8 @@
 #include <windows.h>
 #include <thread>
 #include <tlhelp32.h>
-#include "vector.hpp";
+#include "keybind.hpp"
+#include "vector.hpp"
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_impl_dx11.h"
 #include "ImGui/imgui_impl_win32.h"
@@ -35,9 +36,10 @@ pointer GoldEsp = { 0x19B7FA0, { 0x40 } }; //r_aoproxy_show 1
 pointer BlinkLess = { 0x19C5DC0, { 0x4F0 } }; //r_extra_render_frames 1
 pointer NumberEsp = { 0x19CD3E8, { 0x40 } }; //cl_player_proximity_debug 1
 pointer NoSkybox =  { 0x19D9E78, { 0x90 } }; //r_drawskybox 0
-
+pointer ThirdPerson = { 0x19D9DC0, { 0x5C38 } }; // firstperson = 0 thirdperson = 1
 //scenesystem.dll
 pointer H_nolights = { 0x597F70, { 0x40 } }; //HIDDEN CVAR lb_enable_lights
+pointer H_nobox = { 0x597A58, { 0x40 } }; //HIDDEN CVAR r_aoproxy_min_dist 
 // HOW TO DUMP POINTERS
 	// Go to bots game, open console and type sv_cheats 1. Copy the command u want and change to 1.
 	// Then open cheat engine and if val is 1 scan for 1 (byte) then 0 after u change it, then 1 then 0 and until u get good results
@@ -93,6 +95,7 @@ public:
 private:
 	Vector findClosest(const std::vector<Vector> playerPositions);
 	void MoveMouseToPlayer(Vector position, float smoothingFactor);
+	void MoveViewAnglesToPlayer(Vector position, float smoothingFactor);
 };
 inline Aimbot aimbot;
 
@@ -117,8 +120,66 @@ int HitBone = 0;
 
 
 
+extern float fov = 180;
+float distanceBetweenPoints(const Vector& p1, const Vector& p2) {
+	return std::sqrt((p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y));
+}
 
+bool isInFOV(const Vector& targetPos, const Vector& screenCenter, float fov) {
+	float distance = distanceBetweenPoints(targetPos, screenCenter);
+	float fovFactor = fov;
+	return distance <= fovFactor;
+}
 
+void Aimbot::doRageAimbot()
+{
+	auto view_matrix = *reinterpret_cast<view_matrix_t*>(reader.client + offset::dwViewMatrix);
+
+	std::vector<Vector> playerPositions;
+
+	playerPositions.clear();
+
+	// Get screen dimensions and calculate the center of the screen
+	Vector center_of_screen{
+		static_cast<float>(GetSystemMetrics(SM_CXSCREEN)) / 2.0f,
+		static_cast<float>(GetSystemMetrics(SM_CYSCREEN)) / 2.0f,
+		0.0f
+	};
+
+	for (const auto& player : reader.playerList)
+	{
+
+		Vector playerPosition = *reinterpret_cast<Vector*>(player.pCSPlayerPawn + offset::m_vOldOrigin);
+		// Get the view offset (eye position relative to the player position)
+		Vector viewOffset = *reinterpret_cast<Vector*>(player.pCSPlayerPawn + offset::m_vecViewOffset);
+		// Calculate the entity's eye position by manually adding the components of the vectors
+		Vector entityEyePos;
+		entityEyePos.x = playerPosition.x + viewOffset.x;
+		entityEyePos.y = playerPosition.y + viewOffset.y;
+		entityEyePos.z = playerPosition.z + viewOffset.z;
+		Vector f, h;
+
+		if (Vector::world_to_screen(view_matrix, playerPosition, f) &&
+			Vector::world_to_screen(view_matrix, entityEyePos, h))
+		{
+			// Check if the head position is within the FOV
+			if (isInFOV(h, center_of_screen, fov)) {
+				playerPositions.push_back(h);
+			}
+		}
+	}
+
+	if (GetAsyncKeyState(aimkey))
+	{
+		auto closest_player = findClosest(playerPositions);
+		MoveMouseToPlayer(closest_player, 1);
+
+		/*
+		Vector* ViewAngles = reinterpret_cast<Vector*>(clientbase + offset::dwViewAngles);
+		*ViewAngles = closest_player;
+		*/
+	}
+}
 void Aimbot::doAimbot()
 {
 	auto view_matrix = *reinterpret_cast<view_matrix_t*>(reader.client + offset::dwViewMatrix);
@@ -127,30 +188,35 @@ void Aimbot::doAimbot()
 
 	playerPositions.clear();
 
+	// Get screen dimensions and calculate the center of the screen
+	Vector center_of_screen{
+		static_cast<float>(GetSystemMetrics(SM_CXSCREEN)) / 2.0f,
+		static_cast<float>(GetSystemMetrics(SM_CYSCREEN)) / 2.0f,
+		0.0f
+	};
+
 	for (const auto& player : reader.playerList)
 	{
-
 		Vector playerPosition = *reinterpret_cast<Vector*>(player.pCSPlayerPawn + offset::m_vOldOrigin);
-		Vector headPos = { playerPosition.x += 0.0, playerPosition.y += 0.0, playerPosition.z += BoneIndex };
-		//we are using relative position here which is a really bad method
-		// when player is ducking or using anti aim, will not aim properly. 
-		// as such, use entityeyepos if u want only head. if you want other bones boneindex will work fine
-		// can do both easily since we are internal
+		Vector headPos = { playerPosition.x, playerPosition.y, playerPosition.z + BoneIndex };
 
 		Vector f, h;
 
 		if (Vector::world_to_screen(view_matrix, playerPosition, f) &&
 			Vector::world_to_screen(view_matrix, headPos, h))
 		{
-			playerPositions.push_back(h);
+			// Check if the head position is within the FOV
+			if (isInFOV(h, center_of_screen, fov)) {
+				playerPositions.push_back(h);
+			}
 		}
 	}
 
-	if (GetAsyncKeyState(VK_SHIFT))
+	if (GetAsyncKeyState(aimkey))
 	{
 		auto closest_player = findClosest(playerPositions);
 
-		MoveMouseToPlayer(closest_player, smoothingFactor);
+		MoveMouseToPlayer(closest_player, 1);
 	}
 }
 float calculateDistanceSquared(const vec3& a, const vec3& b) {
@@ -184,7 +250,7 @@ float distance(vec3 p1, vec3 p2)
 {
 	return sqrt(pow(p1.x - p2.x, 2) + pow(p1.y - p2.y, 2) + pow(p1.z - p2.z, 2));
 }
-\
+
 
 
 void SimulateMouseClick() //can use for triggerbot, works fine.
@@ -255,6 +321,37 @@ void Aimbot::MoveMouseToPlayer(Vector position, float smoothingFactor)
 
 	mouse_event(MOUSEEVENTF_MOVE, static_cast<int>(deltaX), static_cast<int>(deltaY), 0, 0);
 }
+
+//dont work
+void Aimbot::MoveViewAnglesToPlayer(Vector position, float /*smoothingFactor*/)
+{
+	if (position.IsZero())
+		return;
+
+	// Get the center of the screen
+	Vector center_of_screen{
+		static_cast<float>(GetSystemMetrics(SM_CXSCREEN)) / 2,
+		static_cast<float>(GetSystemMetrics(SM_CYSCREEN)) / 2,
+		0.0f
+	};
+
+	auto deltaX = position.x - center_of_screen.x;
+	auto deltaY = position.y - center_of_screen.y;
+
+	Vector* ViewAngles = reinterpret_cast<Vector*>(clientbase + offset::dwViewAngles);
+	Vector currentAngles = *ViewAngles;
+
+	
+	currentAngles.x = deltaY; // Pitch (up/down)
+	currentAngles.y = deltaX; // Yaw (left/right)
+
+	// Write the new view angles back to memory
+	*ViewAngles = currentAngles;
+}
+
+
+
+
 
 void Reader::FilterPlayers()
 {
@@ -364,7 +461,7 @@ void SetRichImGuiStyle() //chat GPT made me this style looks cool ig
 	// Overall window style
 	style.WindowPadding = ImVec2(15, 15);  // Padding inside the window
 	style.WindowRounding = 12.0f;          // Rounded corners for windows
-	style.FramePadding = ImVec2(10, 10);   // Padding inside UI elements
+	style.FramePadding = ImVec2(2.5, 2.5);   // Padding inside UI elements
 	style.FrameRounding = 8.0f;            // Rounded corners for buttons and frames
 	style.ItemSpacing = ImVec2(15, 8);     // Spacing between UI elements
 	style.ItemInnerSpacing = ImVec2(10, 10); // Spacing within UI elements
@@ -375,9 +472,9 @@ void SetRichImGuiStyle() //chat GPT made me this style looks cool ig
 	style.Colors[ImGuiCol_FrameBg] = deepBlack;               // Background color of widgets
 	style.Colors[ImGuiCol_FrameBgHovered] = richHover;        // Hover effect on widgets
 	style.Colors[ImGuiCol_FrameBgActive] = richActive;        // Click effect on widgets
-	style.Colors[ImGuiCol_Button] = goldColor;                // Button color
-	style.Colors[ImGuiCol_ButtonHovered] = richHover;         // Button hover effect
-	style.Colors[ImGuiCol_ButtonActive] = richActive;         // Button active/click effect
+	style.Colors[ImGuiCol_Button] = darkBgColor;                // Button color
+	style.Colors[ImGuiCol_ButtonHovered] = deepBlack;         // Button hover effect
+	style.Colors[ImGuiCol_ButtonActive] = deepBlack;         // Button active/click effect
 	style.Colors[ImGuiCol_Header] = ImVec4(0.3f, 0.3f, 0.3f, 1.0f);          // Darker color for the header when not active
 	style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.3f, 0.3f, 0.3f, 1.0f);                      // Brighter color on hover
 	style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.3f, 0.3f, 0.3f, 1.0f);    // Slightly darker gold when active
@@ -429,14 +526,7 @@ void LoadCustomFont()
 
 	io.Fonts->Build();
 }
-bool bunnyhop = false;
-bool trigger = false;
-bool numberesp = false;
-bool goldenesp = false;
-bool noskybox = false;
-bool nolights = false;
-bool rageaimboot = false;
-bool aimboot = false;
+
 
 std::uint8_t* PatternScan(const char* module_name, const char* signature) noexcept {
 	const auto module_handle = GetModuleHandleA(module_name);
@@ -497,9 +587,37 @@ class CCSGOInput //dump in reclass or grab from asphyxia or maybe uc
 public:
 
 };
+//char __fastcall sub_180B7CEC0(__int64 a1)
+
+
+//__int64 __fastcall sub_560530(__int64 a1, __int64 a2)
+bool bunnyhop = false;
+bool trigger = false;
+bool numberesp = false;
+bool goldenesp = true;
+bool goldenespbox = true;
+bool noskybox = false;
+bool nolights = false;
+bool rageaimboot = false;
+bool aimboot = false;
+bool noviewmodel = false;
+namespace viewModel {
+	typedef char(__fastcall* OriginalFunction)(__int64);
+	inline OriginalFunction oHookFunction = nullptr;
+
+	char __fastcall HookViewModel(__int64 a1) {
+		if (noviewmodel) {
+			return 0;
+		}
+		else {
+			return 1;
+		}
+	}
+}
 
 
 
+/*
 typedef void(__fastcall* oCreateMoveFn)(CCSGOInput*, int, char);
 inline oCreateMoveFn oCreateMove = nullptr;
 void __fastcall CreateMoveHook(CCSGOInput* ecx, int edx, char a2);
@@ -510,7 +628,7 @@ void __fastcall CreateMoveHook(CCSGOInput* ecx, int edx, char a2)
 	oCreateMove(ecx, edx, a2);
 
 }
-
+*/
 void CallRage() {
 	auto entityList = *reinterpret_cast<uintptr_t*>(reader.client + offset::dwEntityList);
 	auto localPlayerPawn = *reinterpret_cast<uintptr_t*>(reader.client + offset::dwLocalPlayerPawn);
@@ -520,7 +638,6 @@ void CallRage() {
 	vec3 localEyePos = *reinterpret_cast<vec3*>(localPlayerPawn + offset::m_vOldOrigin) + *reinterpret_cast<vec3*>(localPlayerPawn + offset::m_vecViewOffset);
 	float closest_distance = -1;
 	vec3 enemyPos;
-
 	for (int i = 0; i < 64; i++)
 	{
 		uintptr_t listEntry = *reinterpret_cast<uintptr_t*>(entityList + ((8 * (i & 0x7ff) >> 9) + 16));
@@ -543,8 +660,6 @@ void CallRage() {
 		if (health <= 0 || health > 100)
 			continue;
 
-		//Grabbing entityeyepos is better than relative pos, But we can only grab head.
-		//If you want other bones, u should add boneindex instead.
 		vec3 entityEyePos = *reinterpret_cast<vec3*>(entityPawn + offset::m_vOldOrigin) + *reinterpret_cast<vec3*>(entityPawn + offset::m_vecViewOffset);
 
 
@@ -557,7 +672,7 @@ void CallRage() {
 			enemyPos = entityEyePos;
 		}
 	}
-	float timeFactor = 0.04f; //Try 0.03f or something else if u want
+	float timeFactor = 0.1f;
 	vec3 localPlayerVelocity = *reinterpret_cast<vec3*>(localPlayerPawn + offset::m_vecVelocity);
 
 	vec3 adjustedEnemyPos = enemyPos - (localPlayerVelocity * timeFactor);
@@ -566,13 +681,12 @@ void CallRage() {
 
 	vec3* ViewAngles = reinterpret_cast<vec3*>(clientbase + offset::dwViewAngles);
 	if (ViewAngles != nullptr) {
-		*ViewAngles = relativeAngle;
+			*ViewAngles = relativeAngle;
 	}
 
 }
-
-
-
+bool tperson = false;
+bool fovcircle = true;
 HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags) {
 	if (!ImGui_Initialised) {
 		if (SUCCEEDED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void**)&DirectX11Interface::Device))){
@@ -601,19 +715,24 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 			ImGui::GetIO().ImeWindowHandle = Process::Hwnd;
 			Process::WndProc = (WNDPROC)SetWindowLongPtr(Process::Hwnd, GWLP_WNDPROC, (__int3264)(LONG_PTR)WndProc);
 			ImGui_Initialised = true;
-			/*
-			AllocConsole();
-			freopen("CONOUT$", "w", stdout);
+			/*AllocConsole();
+			freopen("CONOUT$", "w", stdout);*/
 
 			auto createmove = PatternScan("client.dll", "85 D2 0F 85 ? ? ? ? 48 8B C4 44 88 40 18");
 			if (!createmove)
 				return NULL;
 
+			auto drawmodelsig = PatternScan("client.dll", "40 53 48 83 EC 20 48 8B D9 BA ? ? ? ? 48 8D 0D ? ? ? ? E8 ? ? ? ? 48 85 C0 75 0B 48 8B 05 ? ? ? ? 48 8B 40 08 80 38 00 74 08");
+			//r_drawviewmodel 0
+			if (!drawmodelsig)
+				return NULL;
+
 			MH_Initialize();
 
-			MH_CreateHook((LPVOID)createmove, (LPVOID)CreateMoveHook, (LPVOID*)&oCreateMove);
+			//MH_CreateHook((LPVOID)createmove, (LPVOID)viewModel::HookViewModel, (LPVOID*)&oCreateMove);
+			MH_CreateHook((LPVOID)drawmodelsig, (LPVOID)viewModel::HookViewModel, (LPVOID*)&viewModel::oHookFunction);
+			//MH_CreateHook((LPVOID)goldenespsig, (LPVOID)goldhook::GoldenESP, (LPVOID*)&goldhook::oHookFunction);
 			MH_EnableHook(MH_ALL_HOOKS);
-			*/
 			/* to call off
 			MH_DisableHook(MH_ALL_HOOKS);
 			MH_RemoveHook(MH_ALL_HOOKS);
@@ -632,16 +751,26 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 		ImGui::SetNextWindowSize(ImVec2(400, 400));
 		ImGui::Begin("BillionaireWare");
 		//ImGui::Checkbox("Bunny Hop", &bunnyhop);
-		ImGui::Checkbox("Rage Aimbot [SHIFT]", &rageaimboot);
-		ImGui::Checkbox("Legit Aimbot [SHIFT]", &aimboot);
-		ImGui::Combo("[Only for Legit]", &HitBone, ("Head\0Chest\0Legs\0Feet\0"));
+		ImGui::Checkbox("Rage Aimbot", &rageaimboot);
+		ImGui::SameLine();
+		HotkeyButton(aimkey, ChangeKey, keystatus);
+		ImGui::Checkbox("Legit Aimbot", &aimboot);
+		ImGui::Combo("[Only Legit]", &HitBone, ("Head\0Chest\0Legs\0Feet\0"));
+		ImGui::Checkbox("FOV Circle", &fovcircle);
+		ImGui::SameLine();
+		ImGui::SliderFloat("", &fov, 20.0f, 1000.0f);
 		ImGui::SliderFloat("Smoothing", &smoothingFactor, 1.0f, 50.0f);
-		ImGui::Checkbox("Number ESP", &numberesp);
 		ImGui::Checkbox("Golden ESP", &goldenesp);
+		ImGui::SameLine();
+		ImGui::Checkbox("Box", &goldenespbox);
+		ImGui::SameLine();
+		ImGui::Checkbox("Numbers", &numberesp);
 		ImGui::Checkbox("Disable Skybox", &noskybox);
-		ImGui::Checkbox("Disable Lights", &nolights);
-		ImGui::Text("Client base address: 0x%X", clientbase);
-		ImGui::Text("CS2 base address: 0x%X", cs2base);
+		ImGui::Checkbox("Disable Lighting", &nolights);
+		ImGui::Checkbox("Disable ViewModel", &noviewmodel);
+		//ImGui::Checkbox("Third Person", &tperson);
+		ImGui::Text("client.dll: 0x%X", clientbase);
+		ImGui::Text("scenesystem.dll: 0x%X", cs2base);
 		ImGui::Text("Developed by bly", cs2base);
 		ImGui::End();
 	}
@@ -651,11 +780,20 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 	std::once_flag flag4;
 	std::once_flag flag7;
 	std::once_flag flag8;
+	std::once_flag flag9;
+	std::once_flag flag10;
+
 	uintptr_t* goldesp = (uintptr_t*)GetPointerAddress(clientbase + GoldEsp.a, GoldEsp.b); //r_aoproxy_show 1
 	uintptr_t* blinkless = (uintptr_t*)GetPointerAddress(clientbase + BlinkLess.a, BlinkLess.b); //r_r_extra_render_frames 1
 	uintptr_t* number = (uintptr_t*)GetPointerAddress(clientbase + NumberEsp.a, NumberEsp.b); //cl_player_proximity_debug 1
 	uintptr_t* skybox = (uintptr_t*)GetPointerAddress(clientbase + NoSkybox.a, NoSkybox.b); //r_drawskybox 0
+	//uintptr_t* thperson = (uintptr_t*)GetPointerAddress(clientbase + ThirdPerson.a, ThirdPerson.b); //HIDDEN CVAR
+
 	uintptr_t* no_lights = (uintptr_t*)GetPointerAddress(scenebase + H_nolights.a, H_nolights.b); //HIDDEN CVAR
+
+	float* goldespbox = (float*)GetPointerAddress(scenebase + H_nobox.a, H_nobox.b);
+
+	
 	if (goldenesp) {
 		std::call_once(flag2, [&]() { *goldesp = 1; });
 		std::call_once(flag4, [&]() { *blinkless = 1; });
@@ -664,7 +802,25 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 		std::call_once(flag2, [&]() { *goldesp = 0; });
 		std::call_once(flag4, [&]() { *blinkless = 0; });
 	}
+	
+	if (goldenespbox) {
+		std::call_once(flag10, [&]() { *goldespbox = 0; });
+	}
+	else {
+		std::call_once(flag10, [&]() { *goldespbox = -200000; });
+	}
+	Vector center_of_screen{ (float)GetSystemMetrics(0) / 2, (float)GetSystemMetrics(1) / 2, 0.0f };
 
+	if (fovcircle)
+		ImGui::GetBackgroundDrawList()->AddCircle(ImVec2(center_of_screen.x, center_of_screen.y), fov, IM_COL32(255, 255, 255, 128), 100);
+	/*
+	if (tperson) {
+		std::call_once(flag9, [&]() { *thperson = 1; });
+	}
+	else {
+		std::call_once(flag9, [&]() { *thperson = 0; });
+	}
+	*/
 	if (noskybox) {
 		std::call_once(flag7, [&]() { *skybox = 0; });
 	}
@@ -696,9 +852,8 @@ HRESULT APIENTRY MJPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT F
 		}
 	}
 	if (rageaimboot) {
-		if (GetAsyncKeyState(VK_SHIFT) && 0x8000) {
-			CallRage();
-		}
+		aimbot.doRageAimbot();
+		reader.ThreadLoop();
 	}
 	if (aimboot) {
 		aimbot.doAimbot();
